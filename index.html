@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>파동 시뮬레이터</title>
+
+<style>
+    body{
+        margin:0;
+        overflow:hidden;
+        background:#111;
+        color:white;
+        font-family:sans-serif;
+    }
+
+    canvas{
+        display:block;
+    }
+
+    #menu{
+        position:absolute;
+        inset:0;
+        display:flex;
+        justify-content:center;
+        align-items:center;
+        gap:40px;
+        background:#111;
+        z-index:10;
+    }
+
+    .menuBtn{
+        width:260px;
+        height:120px;
+        border:none;
+        border-radius:20px;
+        font-size:28px;
+        background:#222;
+        color:white;
+        cursor:pointer;
+    }
+
+    .menuBtn:hover{
+        background:#333;
+    }
+
+    #ui{
+        position:absolute;
+        top:15px;
+        left:15px;
+        z-index:5;
+        display:none;
+        line-height:2;
+        font-size:17px;
+        background:rgba(20,20,20,0.9);
+        padding:18px;
+        border-radius:18px;
+    }
+
+    #spacingUi{
+        position:absolute;
+        left:15px;
+        bottom:15px;
+        z-index:5;
+        display:none;
+        line-height:2;
+        font-size:17px;
+        background:rgba(20,20,20,0.9);
+        padding:16px;
+        border-radius:18px;
+    }
+
+    input[type="range"]{
+        width:220px;
+    }
+
+    button{
+        background:#222;
+        color:white;
+        border:none;
+        padding:10px 20px;
+        border-radius:10px;
+        cursor:pointer;
+        font-size:16px;
+        margin-top:10px;
+        margin-right:8px;
+    }
+
+    #hz{
+        position:absolute;
+        right:30px;
+        top:20px;
+        font-size:28px;
+        z-index:5;
+    }
+</style>
+</head>
+<body>
+
+<div id="menu">
+
+    <button class="menuBtn"
+        onclick="start('transverse')">
+        횡파
+    </button>
+
+    <button class="menuBtn"
+        onclick="start('longitudinal')">
+        종파
+    </button>
+
+    <button class="menuBtn"
+        onclick="start('rotation')">
+        원운동 → 파동
+    </button>
+
+</div>
+
+<div id="ui">
+
+    <div id="waveControls">
+
+        진폭
+        <input type="range"
+            id="amp"
+            min="10"
+            max="180"
+            value="80">
+
+        <br>
+
+        파장
+        <input type="range"
+            id="wave"
+            min="1"
+            max="40"
+            value="15">
+
+        <br>
+
+        헤르츠
+        <input type="range"
+            id="speed"
+            min="0.1"
+            max="1.5"
+            step="0.1"
+            value="1">
+
+    </div>
+
+    <div id="rotationControls" style="display:none;">
+
+        헤르츠
+        <input type="range"
+            id="rotationHz"
+            min="0.1"
+            max="1.5"
+            step="0.1"
+            value="1">
+
+    </div>
+
+    <br>
+
+    <button id="toggleBtn">
+        Stop
+    </button>
+
+    <button id="homeBtn">
+        Home
+    </button>
+
+</div>
+
+<div id="spacingUi">
+    입자 간격
+    <input type="range"
+        id="particleSpacing"
+        min="10"
+        max="140"
+        value="20">
+    <span id="spacingText">20</span>
+</div>
+
+<div id="hz">
+    1.0 Hz
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+
+const canvas =
+    document.getElementById("canvas");
+
+const ctx =
+    canvas.getContext("2d");
+
+function resize(){
+
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+}
+
+resize();
+
+addEventListener("resize", resize);
+
+let mode = null;
+
+let t = 0;
+
+let lastTime = performance.now();
+
+let running = true;
+
+let shift = false;
+let ctrl = false;
+
+document.addEventListener("keydown", e=>{
+
+    if(e.key === "Shift"){
+        shift = true;
+    }
+
+    if(e.key === "Control"){
+        ctrl = true;
+    }
+});
+
+document.addEventListener("keyup", e=>{
+
+    if(e.key === "Shift"){
+        shift = false;
+    }
+
+    if(e.key === "Control"){
+        ctrl = false;
+    }
+});
+
+const ampSlider =
+    document.getElementById("amp");
+
+const waveSlider =
+    document.getElementById("wave");
+
+const speedSlider =
+    document.getElementById("speed");
+
+const rotationHzSlider =
+    document.getElementById("rotationHz");
+
+const particleSpacingSlider =
+    document.getElementById("particleSpacing");
+
+const spacingText =
+    document.getElementById("spacingText");
+
+const toggleBtn =
+    document.getElementById("toggleBtn");
+
+const homeBtn =
+    document.getElementById("homeBtn");
+
+const hzText =
+    document.getElementById("hz");
+
+particleSpacingSlider.oninput = ()=>{
+    spacingText.innerText = particleSpacingSlider.value;
+};
+
+toggleBtn.onclick = ()=>{
+
+    running = !running;
+
+    toggleBtn.innerText =
+        running ? "Stop" : "Start";
+};
+
+homeBtn.onclick = ()=>{
+
+    mode = null;
+
+    running = true;
+
+    toggleBtn.innerText = "Stop";
+
+    document.getElementById("menu")
+        .style.display = "flex";
+
+    document.getElementById("ui")
+        .style.display = "none";
+
+    document.getElementById("spacingUi")
+        .style.display = "none";
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+};
+
+function start(selected){
+
+    mode = selected;
+
+    lastTime = performance.now();
+
+    document.getElementById("menu")
+        .style.display = "none";
+
+    document.getElementById("ui")
+        .style.display = "block";
+
+    document.getElementById("spacingUi")
+        .style.display = "block";
+
+    if(mode === "rotation"){
+
+        document.getElementById("waveControls")
+            .style.display = "none";
+
+        document.getElementById("rotationControls")
+            .style.display = "block";
+    }
+
+    else{
+
+        document.getElementById("waveControls")
+            .style.display = "block";
+
+        document.getElementById("rotationControls")
+            .style.display = "none";
+    }
+
+    animate(performance.now());
+}
+
+function drawGrid(){
+
+    const gap = 48;
+
+    ctx.strokeStyle = "#222";
+
+    for(let x=0;x<canvas.width;x+=gap){
+
+        ctx.beginPath();
+        ctx.moveTo(x,0);
+        ctx.lineTo(x,canvas.height);
+        ctx.stroke();
+    }
+
+    for(let y=0;y<canvas.height;y+=gap){
+
+        ctx.beginPath();
+        ctx.moveTo(0,y);
+        ctx.lineTo(canvas.width,y);
+        ctx.stroke();
+    }
+}
+
+function drawWaveMode(){
+
+    const amplitude =
+        Number(ampSlider.value);
+
+    const wavelength =
+        Number(waveSlider.value) * 0.002;
+
+    const hz =
+        Number(speedSlider.value);
+
+    hzText.innerText =
+        hz.toFixed(1) + " Hz";
+
+    const centerY =
+        canvas.height / 2;
+
+    const spacing =
+        Number(particleSpacingSlider.value);
+
+    if(mode === "longitudinal"){
+
+        const grad = ctx.createLinearGradient(0, 0, canvas.width, 0);
+
+        for(let i=0;i<=48;i++){
+
+            const x =
+                (i / 48) * canvas.width;
+
+            const phase =
+                (x * wavelength)
+                - (Math.PI * 2 * hz * t);
+
+            const density =
+                (1 - Math.cos(phase)) / 2;
+
+            const shade =
+                Math.round(80 + density * 175);
+
+            grad.addColorStop(
+                i / 48,
+                `rgba(${shade},${shade},${shade},0.28)`
+            );
+        }
+
+        ctx.fillStyle = grad;
+        ctx.fillRect(
+            0,
+            centerY - 8,
+            canvas.width,
+            16
+        );
+    }
+
+    if(mode === "transverse"){
+
+        ctx.beginPath();
+
+        for(let x=0;x<canvas.width;x++){
+
+            const phase =
+                (x * wavelength)
+                - (Math.PI * 2 * hz * t);
+
+            const y =
+                centerY +
+                Math.sin(phase) * amplitude;
+
+            if(x===0){
+                ctx.moveTo(x,y);
+            }
+
+            else{
+                ctx.lineTo(x,y);
+            }
+        }
+
+        ctx.strokeStyle = "rgba(255,255,255,0.28)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    for(let baseX=0;baseX<canvas.width;baseX+=spacing){
+
+        if(shift && Math.abs(baseX - canvas.width/2) > spacing/2){
+            continue;
+        }
+
+        const phase =
+            (baseX * wavelength)
+            - (Math.PI * 2 * hz * t);
+
+        const value =
+            Math.sin(phase);
+
+        let px = baseX;
+        let py = centerY;
+
+        if(mode === "transverse"){
+
+            py =
+                centerY +
+                value * amplitude;
+
+        }
+
+        else{
+
+            px =
+                baseX +
+                value *
+                (amplitude * 0.036);
+        }
+
+        if(!ctrl){
+
+            ctx.beginPath();
+
+            ctx.arc(
+                px,
+                py,
+                shift ? 14 : 7,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fillStyle = "white";
+            ctx.fill();
+        }
+    }
+
+    const graphWidth = 260;
+    const graphHeight = 160;
+
+    const graphX =
+        canvas.width - graphWidth - 30;
+
+    const graphY =
+        canvas.height - graphHeight - 30;
+
+    ctx.fillStyle =
+        "rgba(0,0,30,0.9)";
+
+    ctx.fillRect(
+        graphX,
+        graphY,
+        graphWidth,
+        graphHeight
+    );
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        graphX + 30,
+        graphY + graphHeight/2
+    );
+
+    ctx.lineTo(
+        graphX + graphWidth - 15,
+        graphY + graphHeight/2
+    );
+
+    ctx.strokeStyle = "#1e90ff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        graphX + 30,
+        graphY + 15
+    );
+
+    ctx.lineTo(
+        graphX + 30,
+        graphY + graphHeight - 15
+    );
+
+    ctx.stroke();
+
+    ctx.fillStyle = "white";
+    ctx.font = "20px sans-serif";
+
+    ctx.fillText(
+        "x",
+        graphX + graphWidth - 18,
+        graphY + graphHeight/2 + 24
+    );
+
+    ctx.fillText(
+        "y",
+        graphX + 12,
+        graphY + 28
+    );
+
+    ctx.fillText(
+        hz.toFixed(1) + " Hz",
+        graphX + graphWidth - 90,
+        graphY + 28
+    );
+
+    ctx.beginPath();
+
+    for(let x=0;x<graphWidth-50;x++){
+
+        const phase =
+            x * wavelength;
+
+        const y =
+            graphY +
+            graphHeight/2 +
+            Math.sin(phase) *
+            (amplitude * 0.22);
+
+        const px =
+            graphX + 30 + x;
+
+        if(x===0){
+            ctx.moveTo(px,y);
+        }
+
+        else{
+            ctx.lineTo(px,y);
+        }
+    }
+
+    ctx.strokeStyle = "#4da6ff";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+}
+
+function drawRotationMode(){
+
+    const hz =
+        Number(rotationHzSlider.value);
+
+    hzText.innerText =
+        hz.toFixed(1) + " Hz";
+
+    const centerX = 280;
+    const centerY = canvas.height/2;
+
+    const radius = 120;
+
+    const angle =
+        Math.PI * 2 * hz * t;
+
+    const dotX =
+        centerX +
+        Math.cos(angle) * radius;
+
+    const dotY =
+        centerY +
+        Math.sin(angle) * radius;
+
+    // 원
+    ctx.beginPath();
+
+    ctx.arc(
+        centerX,
+        centerY,
+        radius,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.strokeStyle = "#555";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // 반지름 선
+    ctx.beginPath();
+
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(dotX, dotY);
+
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // 점
+    if(!ctrl){
+
+        ctx.beginPath();
+
+        ctx.arc(
+            dotX,
+            dotY,
+            12,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fillStyle = "white";
+        ctx.fill();
+    }
+
+    // 원운동 점의 높이 투영선
+    ctx.beginPath();
+
+    ctx.moveTo(dotX, dotY);
+    ctx.lineTo(620, dotY);
+
+    ctx.strokeStyle = "#666";
+    ctx.setLineDash([8,8]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 용수철 + 추
+    const springX = 500;
+    const springTop = centerY - radius;
+    const massY = dotY;
+    const massW = 48;
+    const massH = 36;
+    const springBottom = massY - massH / 2;
+
+    // 천장
+    ctx.beginPath();
+    ctx.moveTo(springX - 35, springTop);
+    ctx.lineTo(springX + 35, springTop);
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // 연결선
+    ctx.beginPath();
+    ctx.moveTo(springX, springTop);
+    ctx.lineTo(springX, springTop + 10);
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // 자연스러운 용수철
+    const springStartY = springTop + 10;
+    const springEndY = springBottom;
+    const turns = 8;
+    const springAmp = 16;
+    const segments = 160;
+
+    ctx.beginPath();
+    for(let i=0;i<=segments;i++){
+        const p = i / segments;
+        const y = springStartY + (springEndY - springStartY) * p;
+        const x = springX + Math.sin(p * Math.PI * 2 * turns) * springAmp;
+
+        if(i===0){
+            ctx.moveTo(x, y);
+        }else{
+            ctx.lineTo(x, y);
+        }
+    }
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // 추
+    ctx.beginPath();
+    ctx.rect(
+        springX - massW / 2,
+        massY - massH / 2,
+        massW,
+        massH
+    );
+    ctx.fillStyle = "white";
+    ctx.fill();
+
+    // 추에서 파동 시작점으로 연결
+    ctx.beginPath();
+    ctx.moveTo(springX + massW / 2, massY);
+    ctx.lineTo(620, massY);
+    ctx.strokeStyle = "#666";
+    ctx.setLineDash([8,8]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 파란 사인파
+    ctx.beginPath();
+
+    for(let x=0;x<700;x++){
+
+        const waveY =
+            centerY +
+            Math.sin(
+                angle - (x * 0.02)
+            ) * radius;
+
+        const px = 620 + x;
+
+        if(x===0){
+            ctx.moveTo(px, waveY);
+        }
+
+        else{
+            ctx.lineTo(px, waveY);
+        }
+    }
+
+    ctx.strokeStyle = "#4da6ff";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // 연결점
+    if(!ctrl){
+
+        ctx.beginPath();
+
+        ctx.arc(
+            620,
+            dotY,
+            10,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fillStyle = "#4da6ff";
+        ctx.fill();
+    }
+}
+
+function animate(now){
+
+    if(mode === null){
+        return;
+    }
+
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    drawGrid();
+
+    if(mode === "rotation"){
+        drawRotationMode();
+    }
+
+    else{
+        drawWaveMode();
+    }
+
+    if(running){
+        t += dt;
+    }
+
+    requestAnimationFrame(animate);
+}
+
+</script>
+
+</body>
+</html>
