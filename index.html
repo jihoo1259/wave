@@ -110,7 +110,7 @@
 
     <button class="menuBtn"
         onclick="start('rotation')">
-        원운동 → 파동
+        파동의 성질
     </button>
 
 </div>
@@ -137,7 +137,7 @@
 
         <br>
 
-        헤르츠
+        진동수
         <input type="range"
             id="speed"
             min="0.1"
@@ -149,7 +149,7 @@
 
     <div id="rotationControls" style="display:none;">
 
-        헤르츠
+        진동수
         <input type="range"
             id="rotationHz"
             min="0.1"
@@ -626,7 +626,7 @@ function drawRotationMode(){
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    // 반지름 선
+    // 선
     ctx.beginPath();
 
     ctx.moveTo(centerX, centerY);
@@ -731,7 +731,7 @@ function drawRotationMode(){
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 파란 사인파
+    // 사인파
     ctx.beginPath();
 
     for(let x=0;x<700;x++){
